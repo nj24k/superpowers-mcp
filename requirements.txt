@@ -1,3 +1,4 @@
 mcp[cli]<2
 httpx
 uvicorn
+yt-dlp
