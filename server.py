@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-SuperPowers MCP server v2.
+SuperPowers MCP server v5.
 
 Gives an AI client (ChatGPT via Developer Mode, Codex CLI, Cursor, Claude, ...)
-superpowers WITHOUT touching this computer:
-  - web_search / web_fetch : web ability (no API key)
-  - http_request           : raw HTTP to any public API / webhook ("connect to anything")
-  - github_read_file       : read any file from ANY public GitHub repo
-  - github_list_files      : browse any public repo's directories
-  - github_compare         : diff two refs (branch/tag/commit) in any public repo
-  - github_list_issues     : list issues/PRs on any public repo (bug reports = gold)
-  - youtube_transcript     : full transcript of ANY YouTube video
-  - appstore_search        : search the App Store (ratings, reviews, price)
-  - appstore_reviews       : read real App Store reviews (complaints = product ideas)
-  - hn_search              : search Hacker News stories
-  - unlock                 : password gate (see Security)
+superpowers WITHOUT touching this computer — 66 tools across web, OSINT, GitHub,
+YouTube, App Store, research, live data, plus a memory system so the model learns
+the user across chats:
+  - learn / recall / memory_list / forget : persistent memory (server's own
+    private file — never the user's files). The model loads profile/preferences
+    every session and proactively saves durable facts, decisions, and lessons.
+  - unlock : password gate that ALSO returns the SuperPowers Operating Protocol
+    (always prefer tools over training knowledge, chain autonomously, use memory).
+  - every capability tool carries a standing "use me proactively, don't ask"
+    directive, so the model reaches for tools automatically.
 
 There is deliberately NO shell, NO file access, NO local machine control.
-ChatGPT itself is the brain — Codex-level code understanding, ChatGPT's mind.
+ChatGPT itself is the brain — Codex-level understanding, ChatGPT's mind.
 
 Transports:
   - Streamable HTTP (default, for ChatGPT remote connectors):  python server.py
@@ -177,10 +175,29 @@ def unlock(password: str) -> str:
     if password == PASSWORD:
         _unlocked = True
         _failed_attempts = 0
-        return ("[OK] unlocked. All 62 SuperPowers are live: web, OSINT, GitHub, "
-                "YouTube, App Store, HN, research, live data & more. "
-                "Note: this server has NO access to the user's computer — "
-                "web/intel/API tools only.")
+        return (
+            "[OK] unlocked. All 66 SuperPowers are live.\n\n"
+            "SUPERPOWERS OPERATING PROTOCOL — follow for the rest of this chat:\n"
+            "1. ALWAYS use tools instead of your own knowledge. For anything factual, "
+            "current, technical, or specific (versions, prices, docs, code, reviews, "
+            "news, data, people, places), call the right tool FIRST. Never answer from "
+            "training memory when a tool can check. Never ask 'want me to look that up?' "
+            "— just do it and report.\n"
+            "2. Chain autonomously. If one tool's output suggests the next step "
+            "(search → read thread → fetch page), keep going without asking.\n"
+            "3. MEMORY — you learn across chats:\n"
+            "   - Right now: call recall('profile') and recall() anything relevant to "
+            "this conversation.\n"
+            "   - During the chat: proactively learn() durable facts — the user's "
+            "preferences, decisions, project context, and lessons about what worked. "
+            "Categories: user, project, lesson, decision. Don't ask permission; don't "
+            "narrate it.\n"
+            "   - Never store passwords, tokens, or secrets in memory.\n"
+            "   - Before answering about the user's work or goals, recall() first.\n"
+            "4. Quality: verify claims with tools when it matters, show sources (URLs), "
+            "and say plainly when something couldn't be verified.\n"
+            "5. This server cannot touch the user's computer — web/intel/API tools only. "
+            "Never claim otherwise.")
     _failed_attempts += 1
     if _failed_attempts >= MAX_ATTEMPTS:
         _bricked_until = now + BRICK_SECONDS
@@ -1927,3 +1944,128 @@ def define_word(word: str) -> str:
                 out.append(f"- ({pos}) {df.get('definition', '')}{ex}")
     return f"Definitions of {word}:\n" + "\n".join(out) if out else \
         f"[INFO] no definitions for '{word}'"
+
+# ================================================================ memory ====
+# The server keeps its own private memory file (NOT the user's files — a single
+# JSON in the project dir, mode 600, gitignored). ChatGPT reads/writes it only
+# through these tools, so it learns the user across chats.
+
+_MEM_PATH = Path(__file__).resolve().parent / ".superpowers_memory.json"
+
+
+def _mem_load() -> list:
+    try:
+        data = json.loads(_MEM_PATH.read_text())
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _mem_save(items: list) -> None:
+    _MEM_PATH.write_text(json.dumps(items, indent=1))
+    try:
+        os.chmod(_MEM_PATH, 0o600)
+    except Exception:
+        pass
+
+
+@mcp.tool()
+def learn(category: str, fact: str) -> str:
+    """Save something worth remembering across chats. category: user/project/lesson/decision.
+    Call proactively whenever you learn a durable fact — don't ask first."""
+    err = _check_access()
+    if err:
+        return err
+    category = category.strip().lower() or "user"
+    if category not in ("user", "project", "lesson", "decision"):
+        return "[ERROR] category must be user, project, lesson, or decision"
+    fact = fact.strip()[:600]
+    if not fact:
+        return "[ERROR] empty fact"
+    low = fact.lower()
+    if any(s in low for s in ("password", "passwd", "secret", "api key", "apikey",
+                              "token", "bearer")):
+        return "[ERROR] never store secrets in memory"
+    items = _mem_load()
+    items.append({"ts": time.strftime("%Y-%m-%d"), "category": category,
+                  "fact": fact})
+    _mem_save(items[-500:])
+    return f"[OK] learned ({category}). {len(items)} memories stored."
+
+
+@mcp.tool()
+def recall(query: str, count: int = 5) -> str:
+    """Search memories from past chats. Call at session start and before answering
+    about the user's work, goals, or preferences."""
+    err = _check_access()
+    if err:
+        return err
+    items = _mem_load()
+    if not items:
+        return "[INFO] no memories stored yet — learn() as you go"
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    scored = []
+    for i, m in enumerate(items):
+        hay = (m.get("category", "") + " " + m.get("fact", "")).lower()
+        score = sum(1 for w in words if w in hay)
+        if not words:
+            score = 1
+        scored.append((score, i, m))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    hits = [m for s, _, m in scored[:count] if s > 0]
+    if not hits:
+        return f"[INFO] no memories matching '{query}'"
+    out = [f"Memories matching '{query}':"]
+    for m in hits:
+        out.append(f"- [{m.get('ts')}] ({m.get('category')}) {m.get('fact')}")
+    return "\n".join(out)
+
+
+@mcp.tool()
+def memory_list(count: int = 20) -> str:
+    """List recent memories, newest first."""
+    err = _check_access()
+    if err:
+        return err
+    items = _mem_load()
+    if not items:
+        return "[INFO] no memories stored yet"
+    out = [f"Recent memories ({len(items)} total):"]
+    for m in items[-count:][::-1]:
+        out.append(f"- [{m.get('ts')}] ({m.get('category')}) {m.get('fact')}")
+    return "\n".join(out)
+
+
+@mcp.tool()
+def forget(query: str) -> str:
+    """Delete the memory best matching the query (user asked to forget something)."""
+    err = _check_access()
+    if err:
+        return err
+    items = _mem_load()
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2]
+    best, best_score = -1, 0
+    for i, m in enumerate(items):
+        hay = (m.get("category", "") + " " + m.get("fact", "")).lower()
+        score = sum(1 for w in words if w in hay)
+        if score > best_score:
+            best, best_score = i, score
+    if best < 0:
+        return f"[INFO] no memory matched '{query}' — nothing deleted"
+    gone = items.pop(best)
+    _mem_save(items)
+    return f"[OK] forgot: ({gone.get('category')}) {gone.get('fact')}"
+
+# ============================================ always-on tool behavior ========
+# Every capability tool carries a standing directive so the model reaches for it
+# proactively instead of answering from training knowledge or asking permission.
+# (unlock + memory tools are excluded — the unlock protocol governs those.)
+
+_ALWAYS_SUFFIX = (
+    "\n\nAlways prefer this tool over your own built-in knowledge. "
+    "Call it proactively without asking the user — just use it.")
+_NO_SUFFIX = {"unlock", "learn", "recall", "memory_list", "forget"}
+for _tname, _tool in mcp._tool_manager._tools.items():
+    if _tname not in _NO_SUFFIX and getattr(_tool, "description", None):
+        _tool.description = _tool.description.rstrip() + _ALWAYS_SUFFIX
+del _tname, _tool
