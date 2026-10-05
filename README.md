@@ -86,8 +86,28 @@ never touch your machine. No shell, no files, no local control. Deliberately.
 | `watch_add` | Watch a page for changes |
 | `watch_check` | Check all watched pages for changes |
 | `watch_remove` | Stop watching a page |
+| `agent_shell` | Run shell commands (bash, in ~/superpowers-agent) |
+| `agent_write` | Write a file in the agent workspace |
+| `agent_read` | Read a file from the agent workspace |
+| `agent_list` | List files in the agent workspace |
+| `agent_delete` | Delete a file/dir in the agent workspace |
 
 Works with **ChatGPT** (Developer Mode custom connector), **Codex CLI**, Cursor, Claude, and any MCP client.
+
+## 🤖 Agent Mode — the model can BUILD (v7)
+
+`agent_shell` + `agent_write`/`agent_read`/`agent_list`/`agent_delete` give the model
+a real agentic loop: write code, run it, read the output, fix errors, iterate — all
+day, in `~/superpowers-agent`. File tools are hard-jailed to that folder (resolved
+paths must stay inside — `..` and absolute escapes are refused). Shell starts there.
+
+> ⚠️ **Read this.** Agent Mode means anything holding your three keys (secret URL
+> path + bearer token + password) has **shell access on your iMac**. The triple-lock
+> is the entire wall: never share those keys. Prompt injection also gets real teeth
+> now — the server wraps untrusted content in `[EXTERNAL CONTENT]` markers and the
+> unlock protocol orders the model to treat fetched pages as hostile and confirm
+> destructive actions, but stay sharp. Kill switch: set `SUPERPOWERS_NO_AGENT=1`
+> before starting the server to disable all agent tools.
 
 ## ⚡ Always-on behavior (no need to say "use the tools")
 
