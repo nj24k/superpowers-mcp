@@ -2,3 +2,6 @@ mcp[cli]<2
 httpx
 uvicorn
 yt-dlp
+feedparser
+beautifulsoup4
+pypdf
