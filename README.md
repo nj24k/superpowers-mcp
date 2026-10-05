@@ -8,6 +8,10 @@ never touch your machine. No shell, no files, no local control. Deliberately.
 | Tool | What it does |
 |---|---|
 | `unlock` | Password gate — the model calls this first with the password you give it in chat |
+| `learn` | Save a fact across chats (user/project/lesson/decision) — the model does this proactively |
+| `recall` | Search memories from past chats |
+| `memory_list` | List recent memories |
+| `forget` | Delete a memory |
 | `web_search` | Search the web (no API key) |
 | `web_fetch` | Read any public web page as text |
 | `http_request` | Raw HTTP to any **public** API / webhook ("connect to anything") |
@@ -71,6 +75,38 @@ never touch your machine. No shell, no files, no local control. Deliberately.
 | `random_joke` | A random programming joke |
 
 Works with **ChatGPT** (Developer Mode custom connector), **Codex CLI**, Cursor, Claude, and any MCP client.
+
+## ⚡ Always-on behavior (no need to say "use the tools")
+
+Two mechanisms make the model reach for SuperPowers automatically:
+
+1. **Every tool carries a standing directive** — "always prefer this over your own
+   knowledge, call it proactively without asking." The model sees it on every tool,
+   every call.
+2. **`unlock` returns the Operating Protocol** — once you give ChatGPT the password,
+   it gets instructed for the whole chat: tools first, never answer from training
+   memory when a tool can check, chain tools autonomously, and use memory.
+
+**Memory — it learns across chats.** The server keeps a private memory file
+(`.superpowers_memory.json`, mode 600, gitignored — the server's own notes, never
+your files). ChatGPT can only touch it through `learn`/`recall`/`memory_list`/`forget`.
+Each session it recalls your profile and preferences, and proactively saves durable
+facts, decisions, and lessons — so it gets smarter about you over time. Tell it
+`forget("...")` to erase anything.
+
+**Make it permanent in ChatGPT:** paste this into ChatGPT → Settings →
+Personalization → Custom instructions (or your connector's instructions):
+
+> I have a SuperPowers MCP connector with 60+ tools: web, GitHub, YouTube
+> transcripts, App Store intel, OSINT, research papers, live data, and a memory
+> system (learn/recall/forget). Rules: (1) ALWAYS prefer these tools over your
+> training knowledge for anything factual, current, or technical — call them
+> first, never ask me whether to use them. (2) Chain tools autonomously when one
+> result suggests the next step. (3) At the start of each chat, after I give you
+> the SuperPowers password and you call unlock, recall my profile and anything
+> relevant. (4) Proactively learn() my durable preferences, decisions, project
+> context, and lessons about what worked, so you improve across chats. Never
+> store secrets.
 
 ## 🔒 Security — three layers, no risk constraints
 
