@@ -1,9 +1,9 @@
 # ⚡ SuperPowers MCP
 
 Gives ChatGPT **superpowers with zero access to your computer**. ChatGPT itself
-is the brain — Codex-level code understanding (any GitHub repo, any file), web
-ability, and API access — but it can never touch your machine. No shell, no
-files, no local control. Deliberately.
+is the brain — with 62 tools: GitHub intel, YouTube transcripts, App Store
+research, OSINT, live data, file reading, screenshots and more — but it can
+never touch your machine. No shell, no files, no local control. Deliberately.
 
 | Tool | What it does |
 |---|---|
@@ -13,12 +13,62 @@ files, no local control. Deliberately.
 | `http_request` | Raw HTTP to any **public** API / webhook ("connect to anything") |
 | `github_read_file` | Read any file from **any** public GitHub repo |
 | `github_list_files` | Browse any public repo's folder structure |
-| `github_compare` | Diff two refs (branch/tag/commit) in any public repo — code review superpower |
-| `github_list_issues` | List issues/PRs on any public repo (bug reports = competitor gaps) |
-| `youtube_transcript` | Full transcript of **any** YouTube video |
-| `appstore_search` | Search the App Store (ratings, review counts, price, genre) |
-| `appstore_reviews` | Read real App Store reviews — complaints = product research gold |
+| `github_compare` | Diff two refs (branch/tag/commit) in any public repo |
+| `github_list_issues` | Issues/PRs on any repo — bug reports = competitor gaps |
+| `github_search_repos` | Search repos by keyword (stars, language) |
+| `github_search_code` | Search code inside repos (needs GITHUB_TOKEN) |
+| `github_repo_stats` | Full repo snapshot — stars, forks, license, last push |
+| `github_commit_history` | Recent commits, optionally for one file |
+| `github_pr_files` | Every file + diff in any PR |
+| `github_releases` | Release notes / changelogs of any repo |
+| `github_user_repos` | Anyone's public repos, recently updated |
+| `github_trending` | Hottest new repos created in the last N days |
+| `youtube_transcript` | Full transcript of any YouTube video |
+| `youtube_search` | Search YouTube (titles, channels, durations) |
+| `youtube_channel_videos` | Latest videos from any channel |
+| `web_screenshot` | SEE any webpage as an image |
+| `wayback_snapshot` | Closest archived copy of any page (time travel) |
+| `rss_read` | Read any RSS/Atom feed |
+| `sitemap_urls` | All URLs in a site's sitemap (content audit) |
+| `robots_txt` | robots.txt + declared sitemaps |
+| `dns_lookup` | DNS records (A/MX/TXT/NS/...) via DNS-over-HTTPS |
+| `rdap_lookup` | Domain registration — registrar, created/expiry |
+| `ssl_info` | TLS cert details — issuer, expiry, SANs |
+| `http_headers` | Response headers — server, CDN, tech fingerprints |
+| `tech_detect` | Detect CMS/framework/CDN (competitor recon) |
+| `page_links` | All outbound links on a page |
+| `crtsh_subdomains` | Subdomains via Certificate Transparency logs |
+| `url_expander` | Follow short URLs to final destination (every hop) |
+| `site_status` | Is it up? Status, response time, server |
 | `hn_search` | Search Hacker News stories |
+| `hn_thread` | Read an HN thread's top comments |
+| `stackoverflow_search` | Top-voted Stack Overflow answers |
+| `arxiv_search` | arXiv papers — abstracts, authors, PDFs |
+| `scholar_search` | Semantic Scholar papers with citation counts |
+| `wikipedia_summary` | Clean Wikipedia summary of any topic |
+| `news_search` | Fresh news via Google News RSS |
+| `openlibrary_search` | Book search — titles, authors, year |
+| `urbandictionary_define` | What slang actually means right now |
+| `define_word` | Dictionary definitions with examples |
+| `tvmaze_search` | TV shows — rating, status, network |
+| `fetch_file_preview` | Extract text from any file URL (PDF/CSV/text) |
+| `appstore_search` | Search apps (ratings, price, genre) |
+| `appstore_reviews` | Real user reviews — complaints = gold |
+| `appstore_top_charts` | Top free/paid/grossing charts |
+| `appstore_details` | Full app metadata — version, size, seller |
+| `podcast_search` | Podcast search incl. raw RSS feed URLs |
+| `movie_search` | iTunes movie search |
+| `npm_package_info` | npm intel — version, downloads, deps |
+| `pypi_package_info` | PyPI intel — version, summary, links |
+| `weather_now` | Live weather anywhere |
+| `exchange_rates` | Live currency rates + conversion |
+| `translate_text` | Translate any text |
+| `ip_geolocate` | Geolocate any IP — city, ISP, coords |
+| `stock_quote` | Live stock quote |
+| `crypto_price` | Live crypto price in USD |
+| `osv_vulns` | Known vulnerabilities for any package |
+| `qr_code` | Generate a QR code image |
+| `random_joke` | A random programming joke |
 
 Works with **ChatGPT** (Developer Mode custom connector), **Codex CLI**, Cursor, Claude, and any MCP client.
 
