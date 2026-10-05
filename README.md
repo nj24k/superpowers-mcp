@@ -13,6 +13,12 @@ files, no local control. Deliberately.
 | `http_request` | Raw HTTP to any **public** API / webhook ("connect to anything") |
 | `github_read_file` | Read any file from **any** public GitHub repo |
 | `github_list_files` | Browse any public repo's folder structure |
+| `github_compare` | Diff two refs (branch/tag/commit) in any public repo — code review superpower |
+| `github_list_issues` | List issues/PRs on any public repo (bug reports = competitor gaps) |
+| `youtube_transcript` | Full transcript of **any** YouTube video |
+| `appstore_search` | Search the App Store (ratings, review counts, price, genre) |
+| `appstore_reviews` | Read real App Store reviews — complaints = product research gold |
+| `hn_search` | Search Hacker News stories |
 
 Works with **ChatGPT** (Developer Mode custom connector), **Codex CLI**, Cursor, Claude, and any MCP client.
 
