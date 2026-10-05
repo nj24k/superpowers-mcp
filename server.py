@@ -8,6 +8,12 @@ superpowers WITHOUT touching this computer:
   - http_request           : raw HTTP to any public API / webhook ("connect to anything")
   - github_read_file       : read any file from ANY public GitHub repo
   - github_list_files      : browse any public repo's directories
+  - github_compare         : diff two refs (branch/tag/commit) in any public repo
+  - github_list_issues     : list issues/PRs on any public repo (bug reports = gold)
+  - youtube_transcript     : full transcript of ANY YouTube video
+  - appstore_search        : search the App Store (ratings, reviews, price)
+  - appstore_reviews       : read real App Store reviews (complaints = product ideas)
+  - hn_search              : search Hacker News stories
   - unlock                 : password gate (see Security)
 
 There is deliberately NO shell, NO file access, NO local machine control.
@@ -32,12 +38,17 @@ Security (three layers):
 
 import argparse
 import base64
+import glob
 import ipaddress
 import json
 import os
 import re
 import secrets
+import shutil
 import socket
+import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -141,7 +152,8 @@ def unlock(password: str) -> str:
     if password == PASSWORD:
         _unlocked = True
         _failed_attempts = 0
-        return ("[OK] unlocked. Web, API, and GitHub superpowers are live. "
+        return ("[OK] unlocked. Web, API, GitHub, video-transcript, App Store, "
+                "and HN superpowers are live. "
                 "Note: this server has NO access to the user's computer — "
                 "web/GitHub/API tools only.")
     _failed_attempts += 1
@@ -285,6 +297,12 @@ def _gh_default_branch(repo: str) -> str:
     return meta.get("default_branch", "main")
 
 
+def _gh_repo_ok(repo: str) -> "str | None":
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return "[ERROR] repo must look like 'owner/name'"
+    return None
+
+
 @mcp.tool()
 def github_read_file(repo: str, path: str, ref: str = "HEAD") -> str:
     """Read a file from ANY public GitHub repo (Codex-level code reading,
@@ -319,8 +337,8 @@ def github_list_files(repo: str, path: str = "", ref: str = "HEAD") -> str:
     err = _check_access()
     if err:
         return err
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
-        return "[ERROR] repo must look like 'owner/name'"
+    if err := _gh_repo_ok(repo):
+        return err
     try:
         if ref == "HEAD":
             ref = _gh_default_branch(repo)
@@ -405,3 +423,201 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# --------------------------------------------------- power tools: video ----
+
+@mcp.tool()
+def youtube_transcript(url: str, max_chars: int = 12000) -> str:
+    """Get the transcript/captions of ANY YouTube video. Pass a watch URL or video ID."""
+    err = _check_access()
+    if err:
+        return err
+    m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})", url)
+    vid = m.group(1) if m else url.strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+        return "[ERROR] couldn't parse an 11-char video ID from that input"
+    try:
+        tmp = tempfile.mkdtemp(prefix="ytcaps_")
+        out_tmpl = os.path.join(tmp, "%(id)s.%(ext)s")
+        proc = subprocess.run(
+            [sys.executable, "-m", "yt_dlp", "--skip-download",
+             "--write-auto-subs", "--sub-langs", "en.*",
+             "--sub-format", "vtt", "-o", out_tmpl,
+             "--no-playlist", "--quiet",
+             f"https://www.youtube.com/watch?v={vid}"],
+            capture_output=True, text=True, timeout=90)
+        vtts = glob.glob(os.path.join(tmp, "*.vtt"))
+        if not vtts:
+            shutil.rmtree(tmp, ignore_errors=True)
+            return (f"[ERROR] no English captions found for {vid} "
+                    f"(video may have captions disabled). {proc.stderr[-200:]}")
+        lines: list = []
+        seen = set()
+        with open(vtts[0], encoding="utf-8", errors="ignore") as f:
+            for raw in f:
+                line = raw.strip()
+                if (not line or line == "WEBVTT" or "-->" in line
+                        or line.startswith("NOTE")):
+                    continue
+                line = re.sub(r"<[^>]+>", "", line).strip()  # inline tags
+                if line and line not in seen:
+                    seen.add(line)
+                    lines.append(line)
+        shutil.rmtree(tmp, ignore_errors=True)
+        text = " ".join(lines)
+        if not text:
+            return f"[ERROR] captions were empty for {vid}"
+        return text[:max_chars]
+    except subprocess.TimeoutExpired:
+        return f"[ERROR] caption fetch timed out for {vid}"
+    except Exception as e:
+        return f"[ERROR] transcript failed: {e}"
+
+# --------------------------------------------- power tools: app research ----
+
+@mcp.tool()
+def appstore_search(term: str, country: str = "US", limit: int = 10) -> str:
+    """Search the App Store for apps (name, rating, review count, price, genre, link)."""
+    err = _check_access()
+    if err:
+        return err
+    try:
+        r = httpx.get("https://itunes.apple.com/search",
+                      params={"term": term, "country": country,
+                              "entity": "software", "limit": limit},
+                      timeout=20).json()
+    except Exception as e:
+        return f"[ERROR] App Store search failed: {e}"
+    hits = r.get("results", [])
+    if not hits:
+        return f"[INFO] no apps found for '{term}' ({country})"
+    out = [f"App Store results for '{term}' ({country}):"]
+    for a in hits:
+        out.append(
+            f"- {a.get('trackName')} (id {a.get('trackId')}) | "
+            f"★ {a.get('averageUserRating', '?')}/5 from "
+            f"{a.get('userRatingCount', 0):,} ratings | "
+            f"price: {a.get('formattedPrice', '?')} | {a.get('primaryGenreName', '?')}\n"
+            f"  by {a.get('sellerName', '?')} — {a.get('trackViewUrl', '')}")
+    return "\n".join(out)
+
+@mcp.tool()
+def appstore_reviews(app_id: str, country: str = "US",
+                     sort: str = "mostRecent", max_chars: int = 6000) -> str:
+    """Read real App Store reviews for any app (id = numeric App Store ID).
+    sort: 'mostRecent' or 'mostHelpful'. Complaints = gold for product research."""
+    err = _check_access()
+    if err:
+        return err
+    try:
+        r = httpx.get(
+            f"https://itunes.apple.com/{country}/rss/customerreviews/"
+            f"id={app_id}/sortBy={sort}/json",
+            timeout=20).json()
+    except Exception as e:
+        return f"[ERROR] review fetch failed: {e}"
+    try:
+        entries = r["feed"]["entry"]
+    except KeyError:
+        return f"[INFO] no reviews found for app id {app_id} ({country})"
+    out = [f"App Store reviews for app id {app_id} ({country}, {sort}):"]
+    for e in entries[1:11]:  # first entry is app metadata
+        rating = e.get("im:rating", {}).get("label", "?")
+        title = e.get("title", {}).get("label", "")
+        body = e.get("content", {}).get("label", "")[:400]
+        author = e.get("author", {}).get("name", {}).get("label", "?")
+        ver = e.get("im:version", {}).get("label", "?")
+        out.append(f"- ★{rating} '{title}' by {author} (v{ver}): {body}")
+    return "\n".join(out)[:max_chars]
+
+# --------------------------------------------------- power tools: HN --------
+
+@mcp.tool()
+def hn_search(query: str, count: int = 8) -> str:
+    """Search Hacker News stories — great for finding what devs/users complain about."""
+    err = _check_access()
+    if err:
+        return err
+    try:
+        r = httpx.get("https://hn.algolia.com/api/v1/search",
+                      params={"query": query, "tags": "story",
+                              "hitsPerPage": count},
+                      timeout=20).json()
+    except Exception as e:
+        return f"[ERROR] HN search failed: {e}"
+    hits = r.get("hits", [])
+    if not hits:
+        return f"[INFO] no HN stories for '{query}'"
+    out = [f"Hacker News results for '{query}':"]
+    for h in hits:
+        link = f"https://news.ycombinator.com/item?id={h['objectID']}"
+        out.append(
+            f"- {h.get('title')} | {h.get('points', 0)} pts, "
+            f"{h.get('num_comments', 0)} comments | {h.get('url', '')}\n"
+            f"  discussion: {link}")
+    return "\n".join(out)
+
+# ---------------------------------------------- power tools: github pro -----
+
+@mcp.tool()
+def github_compare(repo: str, base: str, head: str) -> str:
+    """Diff two refs in a public GitHub repo (branch, tag, or commit SHA).
+    Shows status, ahead/behind, and per-file patches (truncated)."""
+    err = _check_access()
+    if err:
+        return err
+    if err := _gh_repo_ok(repo):
+        return err
+    try:
+        r = httpx.get(
+            f"https://api.github.com/repos/{repo}/compare/{base}...{head}",
+            headers=_gh_headers(), timeout=30).json()
+    except Exception as e:
+        return f"[ERROR] compare failed: {e}"
+    if "status" not in r:
+        return f"[ERROR] {r.get('message', 'compare unavailable')}"
+    out = [f"Compare {repo} {base}...{head}: {r['status']} | "
+           f"+{r.get('ahead_by', 0)} ahead, -{r.get('behind_by', 0)} behind | "
+           f"{r.get('total_commits', 0)} commits"]
+    for f in r.get("files", [])[:12]:
+        patch = (f.get("patch") or "")[:1500]
+        out.append(
+            f"\n{f['status'].upper()} {f['filename']} "
+            f"(+{f.get('additions', 0)}/-{f.get('deletions', 0)})\n{patch}")
+    n = len(r.get("files", []))
+    if n > 12:
+        out.append(f"\n... and {n - 12} more files")
+    return "\n".join(out)
+
+@mcp.tool()
+def github_list_issues(repo: str, state: str = "open",
+                       limit: int = 10) -> str:
+    """List issues (and PRs) on a public GitHub repo. state: open/closed/all.
+    Bug reports + feature requests = competitor gaps and user pain points."""
+    err = _check_access()
+    if err:
+        return err
+    if err := _gh_repo_ok(repo):
+        return err
+    try:
+        r = httpx.get(f"https://api.github.com/repos/{repo}/issues",
+                      params={"state": state, "per_page": limit,
+                              "sort": "updated"},
+                      headers=_gh_headers(), timeout=20,
+                      follow_redirects=True).json()
+    except Exception as e:
+        return f"[ERROR] issues fetch failed: {e}"
+    if not isinstance(r, list):
+        return f"[ERROR] {r.get('message', 'issues unavailable')}"
+    if not r:
+        return f"[INFO] no {state} issues on {repo}"
+    out = [f"{state.capitalize()} issues/PRs on {repo}:"]
+    for i in r:
+        kind = "PR" if "pull_request" in i else "issue"
+        labels = ", ".join(l["name"] for l in i.get("labels", [])) or "no labels"
+        body = (i.get("body") or "")[:250].replace("\n", " ")
+        out.append(
+            f"- #{i['number']} [{kind}] {i['title']} | "
+            f"{i['comments']} comments | {labels} | by {i['user']['login']}\n"
+            f"  {body}\n  {i['html_url']}")
+    return "\n".join(out)
